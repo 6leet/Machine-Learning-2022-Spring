@@ -1,0 +1,4 @@
+training-image: train-images-idx3-ubyte
+training-label: train-labels-idx1-ubyte
+testing-image: t10k-images-idx3-ubyte
+testing-label: t10k-labels-idx1-ubyte
