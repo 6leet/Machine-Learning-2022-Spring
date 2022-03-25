@@ -98,7 +98,6 @@ def learn_continuous(train_images, train_labels):
     scale_list = [[[[] for _ in range(cols)] for _ in range(rows)] for _ in range(10)]
     p = [0] * 10
 
-    cnt = 0
     for image, label in zip(train_images, train_labels):
         p[label] += 1
         for i in range(rows):
@@ -107,13 +106,24 @@ def learn_continuous(train_images, train_labels):
                 scale_list[label][i][j].append(image[i][j])
 
     mean = [[[scale_sum[n][i][j] / p[n] for j in range(cols)] for i in range(rows)] for n in range(10)]
-    var = [[[sum([pow(mean[n][i][j] - s, 2) for s in scale_list[n][i][j]]) for j in range(cols)] for i in range(rows)] for n in range(10)]
+    # print(mean[0][4][16])
+    # print(sum(scale_list[0][4][16]) / len(scale_list[0][4][16]))
+    var = [[[sum([pow(mean[n][i][j] - s, 2) for s in scale_list[n][i][j]]) / p[n] for j in range(cols)] for i in range(rows)] for n in range(10)]
+
+    print(var[0][4][16])
+    sig = 0
+    for s in scale_list[0][4][16]:
+        sig += pow(mean[0][4][16] - s, 2)
+    print(sig / p[0])
 
     return mean, var, p
 
 def gaussian(mean, var, x):
     if var == 0:
-        var = 0.001    
+        if x == mean:
+            return 1
+        else:
+            return 0.0001
     return 1 / math.sqrt(2 * math.pi * var) * math.exp(-pow(x - mean, 2) / (2 * var))
 
 def test_continuous(test_images, test_labels, mean, var, p):
@@ -133,15 +143,15 @@ def test_continuous(test_images, test_labels, mean, var, p):
                 for j in range(cols):
                     # if image[i][j] != 0:
                     gauss = gaussian(mean[n][i][j], var[n][i][j], image[i][j])
-                    if label == n:
-                        print(mean[n][i][j], var[n][i][j], image[i][j])
-                        print(gauss)
+                    # if label == n:
+                    #     print(mean[n][i][j], var[n][i][j], image[i][j])
+                    #     print(gauss)
                     gauss = math.log(gauss) if gauss != 0 else 0
                     jp = jp + gauss
-            print(jp, p[n], p_sum)
+            # print(jp, p[n], p_sum)
             posts[n] = jp + math.log(p[n] / p_sum)
-            # if (posts[n] != 0):
-            #     posts[n] = -1 / posts[n]
+            if (posts[n] != 0):
+                posts[n] = -1 / posts[n]
 
         posts_sum = sum(posts) if sum(posts) != 0 else 1
         for n in range(10):
@@ -163,18 +173,18 @@ def naive_bayes(train_images, train_labels, test_images, test_labels, mode):
         print('Error rate:', err)
     elif mode == 1:
         mean, var, p = learn_continuous(train_images, train_labels)
-        image = []
-        for i in range(28):
-            row = []
-            for j in range(28):
-                print(mean[7][i][j], end=' ')
-                if (mean[7][i][j] < 128):
-                    row.append(0)
-                else:
-                    row.append(1)
-            image.append(row)
-            print()
-        plt.imsave('wtf', image, cmap='gray', format='png')
+        # image = []
+        # for i in range(28):
+        #     row = []
+        #     for j in range(28):
+        #         print(mean[0][i][j], end=' ')
+        #         if (mean[0][i][j] < 128):
+        #             row.append(0)
+        #         else:
+        #             row.append(1)
+        #     image.append(row)
+        #     print()
+        # plt.imsave('wtf', image, cmap='gray', format='png')
         err = test_continuous(test_images, test_labels, mean, var, p)
         print('Error rate', err)
 
@@ -185,8 +195,8 @@ if (len(sys.argv) < 3):
 train_image_file, train_label_file, test_image_file, test_label_file = read_yaml(sys.argv[2])
 train_images, train_labels = preprocess(train_image_file, train_label_file)
 test_images, test_labels = preprocess(test_image_file, test_label_file)
-# train_images = [train_images[0]]
-# train_labels = [train_labels[0]]
-test_images = test_images[1:2]
-test_labels = test_labels[1:2]
+# train_images = train_images[0:12000]
+# train_labels = train_labels[0:12000]
+# test_images = test_images[0:20]
+# test_labels = test_labels[0:20]
 naive_bayes(train_images, train_labels, test_images, test_labels, int(sys.argv[1]))
