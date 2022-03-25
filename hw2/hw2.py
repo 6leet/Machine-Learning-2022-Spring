@@ -106,24 +106,13 @@ def learn_continuous(train_images, train_labels):
                 scale_list[label][i][j].append(image[i][j])
 
     mean = [[[scale_sum[n][i][j] / p[n] for j in range(cols)] for i in range(rows)] for n in range(10)]
-    # print(mean[0][4][16])
-    # print(sum(scale_list[0][4][16]) / len(scale_list[0][4][16]))
     var = [[[sum([pow(mean[n][i][j] - s, 2) for s in scale_list[n][i][j]]) / p[n] for j in range(cols)] for i in range(rows)] for n in range(10)]
-
-    print(var[0][4][16])
-    sig = 0
-    for s in scale_list[0][4][16]:
-        sig += pow(mean[0][4][16] - s, 2)
-    print(sig / p[0])
 
     return mean, var, p
 
 def gaussian(mean, var, x):
-    if var == 0:
-        if x == mean:
-            return 1
-        else:
-            return 0.0001
+    if var == 0: ## make approximation to dirac delta function (try)
+        var = 500
     return 1 / math.sqrt(2 * math.pi * var) * math.exp(-pow(x - mean, 2) / (2 * var))
 
 def test_continuous(test_images, test_labels, mean, var, p):
@@ -143,12 +132,11 @@ def test_continuous(test_images, test_labels, mean, var, p):
                 for j in range(cols):
                     # if image[i][j] != 0:
                     gauss = gaussian(mean[n][i][j], var[n][i][j], image[i][j])
-                    # if label == n:
-                    #     print(mean[n][i][j], var[n][i][j], image[i][j])
-                    #     print(gauss)
-                    gauss = math.log(gauss) if gauss != 0 else 0
+                    if gauss == 0: ## make probability small enough, but not zero
+                        gauss = 1 / 60000
+                    gauss = math.log(gauss) # if gauss != 0 else 0
                     jp = jp + gauss
-            # print(jp, p[n], p_sum)
+
             posts[n] = jp + math.log(p[n] / p_sum)
             if (posts[n] != 0):
                 posts[n] = -1 / posts[n]
@@ -197,6 +185,6 @@ train_images, train_labels = preprocess(train_image_file, train_label_file)
 test_images, test_labels = preprocess(test_image_file, test_label_file)
 # train_images = train_images[0:12000]
 # train_labels = train_labels[0:12000]
-# test_images = test_images[0:20]
-# test_labels = test_labels[0:20]
+# test_images = test_images[0:1000]
+# test_labels = test_labels[0:1000]
 naive_bayes(train_images, train_labels, test_images, test_labels, int(sys.argv[1]))
