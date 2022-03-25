@@ -123,7 +123,7 @@ def gaussian(mean, var, x):
         if x == mean:
             return 1
         else:
-            return 0.0001
+            return 0.0000001
     return 1 / math.sqrt(2 * math.pi * var) * math.exp(-pow(x - mean, 2) / (2 * var))
 
 def test_continuous(test_images, test_labels, mean, var, p):
@@ -197,6 +197,6 @@ train_images, train_labels = preprocess(train_image_file, train_label_file)
 test_images, test_labels = preprocess(test_image_file, test_label_file)
 # train_images = train_images[0:12000]
 # train_labels = train_labels[0:12000]
-# test_images = test_images[0:20]
-# test_labels = test_labels[0:20]
+test_images = test_images[0:10]
+test_labels = test_labels[0:10]
 naive_bayes(train_images, train_labels, test_images, test_labels, int(sys.argv[1]))
