@@ -78,7 +78,7 @@ def test_discrete(test_images, test_labels, conp, p):
                     if prob == 0:
                         prob = 1 / 60000
                     jp = jp + math.log(prob)
-            posts[n] = jp + math.log(p[n] / p_sum) ## probability, haven't convert to log scale yet
+            posts[n] = jp + math.log(p[n] / p_sum) ## convert to log scale to avoid underflow
             # posts[n] = jp / p_n_m[n] * p[n] / p_sum ## probability, haven't convert to log scale yet
             if (posts[n] != 0):
                 posts[n] = -1 / posts[n]
