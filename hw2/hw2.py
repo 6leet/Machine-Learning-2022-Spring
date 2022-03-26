@@ -1,5 +1,6 @@
 from asyncore import read
 from cProfile import label
+from cv2 import threshold
 import yaml
 import sys
 import matplotlib.pyplot as plt
@@ -44,7 +45,7 @@ def preprocess(_image_file, _label_file): ## non-intel: high endian, intel: low 
 
 def learn_discrete(train_images, train_labels):
     print('training in discrete mode...')
-    cols, rows = len(train_images[0]), len(train_images[0][0])
+    rows, cols = len(train_images[0]), len(train_images[0][0])
     bins = 32
     conp = [[[[0] * bins for _ in range(cols)] for _ in range(rows)] for _ in range(10)]
     p = [0] * 10
@@ -58,10 +59,10 @@ def learn_discrete(train_images, train_labels):
     return conp, p
 
 def test_discrete(test_images, test_labels, conp, p):
-    cols, rows = len(test_images[0]), len(test_images[0][0])
+    rows, cols = len(test_images[0]), len(test_images[0][0])
 
     p_sum = sum(p)
-    p_28_28 = [pow(p[i], 28 * 28) for i in range(len(p))]
+    p_n_m = [pow(p[i], rows * cols) for i in range(len(p))]
 
     posts = [0] * 10
     err = 0
@@ -70,13 +71,17 @@ def test_discrete(test_images, test_labels, conp, p):
         predict = -1
         max_post = -1
         for n in range(10):
-            jp = 1
+            jp = 0
             for i in range(rows):
                 for j in range(cols):
-                    jp = jp * conp[n][i][j][int(image[i][j] / 8)]
-            posts[n] = jp / p_28_28[n] * p[n] / p_sum
+                    prob = conp[n][i][j][int(image[i][j] / 8)] / p[n]
+                    if prob == 0:
+                        prob = 1 / 60000
+                    jp = jp + math.log(prob)
+            posts[n] = jp + math.log(p[n] / p_sum) ## probability, haven't convert to log scale yet
+            # posts[n] = jp / p_n_m[n] * p[n] / p_sum ## probability, haven't convert to log scale yet
             if (posts[n] != 0):
-                posts[n] = -1 / math.log(posts[n])
+                posts[n] = -1 / posts[n]
 
         posts_sum = sum(posts) if sum(posts) != 0 else 1
         for n in range(10):
@@ -93,7 +98,7 @@ def test_discrete(test_images, test_labels, conp, p):
 
 def learn_continuous(train_images, train_labels):
     print('training in continuous mode...')
-    cols, rows = len(train_images[0]), len(train_images[0][0])
+    rows, cols = len(train_images[0]), len(train_images[0][0])
     scale_sum = [[[0] * cols for _ in range(rows)] for _ in range(10)]
     scale_list = [[[[] for _ in range(cols)] for _ in range(rows)] for _ in range(10)]
     p = [0] * 10
@@ -106,28 +111,17 @@ def learn_continuous(train_images, train_labels):
                 scale_list[label][i][j].append(image[i][j])
 
     mean = [[[scale_sum[n][i][j] / p[n] for j in range(cols)] for i in range(rows)] for n in range(10)]
-    # print(mean[0][4][16])
-    # print(sum(scale_list[0][4][16]) / len(scale_list[0][4][16]))
     var = [[[sum([pow(mean[n][i][j] - s, 2) for s in scale_list[n][i][j]]) / p[n] for j in range(cols)] for i in range(rows)] for n in range(10)]
-
-    print(var[0][4][16])
-    sig = 0
-    for s in scale_list[0][4][16]:
-        sig += pow(mean[0][4][16] - s, 2)
-    print(sig / p[0])
 
     return mean, var, p
 
 def gaussian(mean, var, x):
-    if var == 0:
-        if x == mean:
-            return 1
-        else:
-            return 0.0000001
+    if var == 0: ## make approximation to dirac delta function (try)
+        var = 500
     return 1 / math.sqrt(2 * math.pi * var) * math.exp(-pow(x - mean, 2) / (2 * var))
 
 def test_continuous(test_images, test_labels, mean, var, p):
-    cols, rows = len(test_images[0]), len(test_images[0][0])
+    rows, cols = len(test_images[0]), len(test_images[0][0])
 
     p_sum = sum(p)
 
@@ -143,12 +137,11 @@ def test_continuous(test_images, test_labels, mean, var, p):
                 for j in range(cols):
                     # if image[i][j] != 0:
                     gauss = gaussian(mean[n][i][j], var[n][i][j], image[i][j])
-                    # if label == n:
-                    #     print(mean[n][i][j], var[n][i][j], image[i][j])
-                    #     print(gauss)
-                    gauss = math.log(gauss) if gauss != 0 else 0
+                    if gauss == 0: ## make probability small enough, but not zero
+                        gauss = 1 / 60000
+                    gauss = math.log(gauss) ## convert to log scale directly
                     jp = jp + gauss
-            # print(jp, p[n], p_sum)
+
             posts[n] = jp + math.log(p[n] / p_sum)
             if (posts[n] != 0):
                 posts[n] = -1 / posts[n]
@@ -166,11 +159,30 @@ def test_continuous(test_images, test_labels, mean, var, p):
 
     return err / len(test_images)
 
+def get_maxp(conp, rows, cols):
+    maxp = [[[max(range(len(conp[n][i][j])), key=conp[n][i][j].__getitem__) for j in range(cols)] for i in range(rows)] for n in range(10)]
+    return maxp
+
+def imagination(maxp, rows, cols, mode):
+    threshold = 16 if mode == 0 else 128
+    images = [[[int(maxp[n][i][j] >= threshold) for j in range(cols)] for i in range(rows)] for n in range(10)]
+    for n in range(len(images)):
+        print(str(n) + ':')
+        for i in range(rows):
+            for j in range(cols):
+                print(images[n][i][j], end=' ')
+            print()
+        print()
+
 def naive_bayes(train_images, train_labels, test_images, test_labels, mode):
+    rows, cols = len(train_images[0]), len(train_images[0][0])
     if mode == 0:
         conp, p = learn_discrete(train_images, train_labels)
         err = test_discrete(test_images, test_labels, conp, p)
         print('Error rate:', err)
+        maxp = get_maxp(conp, rows, cols)
+        imagination(maxp, rows, cols, mode)
+
     elif mode == 1:
         mean, var, p = learn_continuous(train_images, train_labels)
         # image = []
@@ -187,6 +199,7 @@ def naive_bayes(train_images, train_labels, test_images, test_labels, mode):
         # plt.imsave('wtf', image, cmap='gray', format='png')
         err = test_continuous(test_images, test_labels, mean, var, p)
         print('Error rate', err)
+        imagination(mean, rows, cols, mode)
 
 ## example: python3 hw2.py 0 hw2.yaml
 if (len(sys.argv) < 3):
@@ -195,8 +208,8 @@ if (len(sys.argv) < 3):
 train_image_file, train_label_file, test_image_file, test_label_file = read_yaml(sys.argv[2])
 train_images, train_labels = preprocess(train_image_file, train_label_file)
 test_images, test_labels = preprocess(test_image_file, test_label_file)
-# train_images = train_images[0:12000]
-# train_labels = train_labels[0:12000]
-test_images = test_images[0:10]
-test_labels = test_labels[0:10]
+# train_images = train_images[0:1000]
+# train_labels = train_labels[0:1000]
+# test_images = test_images[0:10]
+# test_labels = test_labels[0:10]
 naive_bayes(train_images, train_labels, test_images, test_labels, int(sys.argv[1]))
