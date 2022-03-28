@@ -59,7 +59,7 @@ def test_discrete(test_images, test_labels, conp, p):
     rows, cols = len(test_images[0]), len(test_images[0][0])
 
     p_sum = sum(p)
-    p_n_m = [pow(p[i], rows * cols) for i in range(len(p))]
+    # p_n_m = [pow(p[i], rows * cols) for i in range(len(p))]
 
     posts = [0] * 10
     err = 0
@@ -117,6 +117,11 @@ def gaussian(mean, var, x):
         var = 500
     return 1 / math.sqrt(2 * math.pi * var) * math.exp(-pow(x - mean, 2) / (2 * var))
 
+def gaussian_log(mean, var, x):
+    if var == 0 and mean == 0:
+        var = 5000
+    return -math.log(math.sqrt(2 * math.pi * var)) + -pow(x - mean, 2) / (2 * var)
+
 def test_continuous(test_images, test_labels, mean, var, p):
     rows, cols = len(test_images[0]), len(test_images[0][0])
 
@@ -124,6 +129,7 @@ def test_continuous(test_images, test_labels, mean, var, p):
 
     posts = [0] * 10
     err = 0
+    image_i = 0
     for image, label in zip(test_images, test_labels):
         print('Posterior (in log scale):')
         predict = -1
@@ -132,11 +138,11 @@ def test_continuous(test_images, test_labels, mean, var, p):
             jp = 0
             for i in range(rows):
                 for j in range(cols):
-                    # if image[i][j] != 0:
-                    gauss = gaussian(mean[n][i][j], var[n][i][j], image[i][j])
-                    if gauss == 0: ## make probability small enough, but not zero
-                        gauss = 1 / 60000
-                    gauss = math.log(gauss) ## convert to log scale directly
+                    # gauss = gaussian(mean[n][i][j], var[n][i][j], image[i][j])
+                    # if gauss == 0: ## make probability small enough, but not zero
+                    #     gauss = 1 / 60000
+                    # gauss = math.log(gauss) ## convert to log scale directly
+                    gauss = gaussian_log(mean[n][i][j], var[n][i][j], image[i][j])
                     jp = jp + gauss
 
             posts[n] = jp + math.log(p[n] / p_sum)
@@ -152,7 +158,9 @@ def test_continuous(test_images, test_labels, mean, var, p):
                 predict = n
         print('Prediction:', predict, 'Ans:', label)
         if predict != label:
+            # plt.imsave('error_cont/' + str(image_i) + '_' + str(predict), image, cmap='gray', format='png')
             err += 1
+        image_i += 1
 
     return err / len(test_images)
 
@@ -161,8 +169,10 @@ def get_maxp(conp, rows, cols):
     return maxp
 
 def imagination(maxp, rows, cols, mode):
+    mode_s = 'discrete' if mode == 0 else 'continuous'
     threshold = 16 if mode == 0 else 128
     images = [[[int(maxp[n][i][j] >= threshold) for j in range(cols)] for i in range(rows)] for n in range(10)]
+    # images = [[[int(maxp[n][i][j]) for j in range(cols)] for i in range(rows)] for n in range(10)]
     for n in range(len(images)):
         print(str(n) + ':')
         for i in range(rows):
@@ -170,6 +180,7 @@ def imagination(maxp, rows, cols, mode):
                 print(images[n][i][j], end=' ')
             print()
         print()
+        # plt.imsave(str(n) + '_var', images[n], cmap='gray', format='png')
 
 def naive_bayes(train_images, train_labels, test_images, test_labels, mode):
     rows, cols = len(train_images[0]), len(train_images[0][0])
@@ -182,21 +193,25 @@ def naive_bayes(train_images, train_labels, test_images, test_labels, mode):
 
     elif mode == 1:
         mean, var, p = learn_continuous(train_images, train_labels)
-        # image = []
-        # for i in range(28):
-        #     row = []
-        #     for j in range(28):
-        #         print(mean[0][i][j], end=' ')
-        #         if (mean[0][i][j] < 128):
-        #             row.append(0)
-        #         else:
-        #             row.append(1)
-        #     image.append(row)
+        # for n in range(len(mean)):
+        #     print(n)
+        #     for i in range(rows):
+        #         for j in range(cols):
+        #             print(mean[n][i][j], end=' ')
+        #         print()
         #     print()
-        # plt.imsave('wtf', image, cmap='gray', format='png')
+
+        # for n in range(len(var)):
+        #     print(n)
+        #     for i in range(rows):
+        #         for j in range(cols):
+        #             print(var[n][i][j], end=' ')
+        #         print()
+        #     print()
         err = test_continuous(test_images, test_labels, mean, var, p)
         print('Error rate', err)
         imagination(mean, rows, cols, mode)
+        # imagination(var, rows, cols, mode)
 
 ## example: python3 hw2.py 0 hw2.yaml
 if (len(sys.argv) < 3):
