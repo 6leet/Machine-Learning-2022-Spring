@@ -59,7 +59,6 @@ def test_discrete(test_images, test_labels, conp, p):
     rows, cols = len(test_images[0]), len(test_images[0][0])
 
     p_sum = sum(p)
-    # p_n_m = [pow(p[i], rows * cols) for i in range(len(p))]
 
     posts = [0] * 10
     err = 0
@@ -76,7 +75,6 @@ def test_discrete(test_images, test_labels, conp, p):
                         prob = 1 / 60000
                     jp = jp + math.log(prob)
             posts[n] = jp + math.log(p[n] / p_sum) ## convert to log scale to avoid underflow
-            # posts[n] = jp / p_n_m[n] * p[n] / p_sum ## probability, haven't convert to log scale yet
             if (posts[n] != 0):
                 posts[n] = -1 / posts[n]
 
@@ -112,14 +110,13 @@ def learn_continuous(train_images, train_labels):
 
     return mean, var, p
 
-def gaussian(mean, var, x):
+def _gaussian(mean, var, x):
     if var == 0: ## make approximation to dirac delta function (try)
         var = 500
     return 1 / math.sqrt(2 * math.pi * var) * math.exp(-pow(x - mean, 2) / (2 * var))
 
 def gaussian_log(mean, var, x):
-    if var == 0 and mean == 0:
-        var = 5000
+    var = max([var, 2500])
     return -math.log(math.sqrt(2 * math.pi * var)) + -pow(x - mean, 2) / (2 * var)
 
 def test_continuous(test_images, test_labels, mean, var, p):
@@ -138,10 +135,6 @@ def test_continuous(test_images, test_labels, mean, var, p):
             jp = 0
             for i in range(rows):
                 for j in range(cols):
-                    # gauss = gaussian(mean[n][i][j], var[n][i][j], image[i][j])
-                    # if gauss == 0: ## make probability small enough, but not zero
-                    #     gauss = 1 / 60000
-                    # gauss = math.log(gauss) ## convert to log scale directly
                     gauss = gaussian_log(mean[n][i][j], var[n][i][j], image[i][j])
                     jp = jp + gauss
 
@@ -158,7 +151,6 @@ def test_continuous(test_images, test_labels, mean, var, p):
                 predict = n
         print('Prediction:', predict, 'Ans:', label)
         if predict != label:
-            # plt.imsave('error_cont/' + str(image_i) + '_' + str(predict), image, cmap='gray', format='png')
             err += 1
         image_i += 1
 
@@ -169,10 +161,8 @@ def get_maxp(conp, rows, cols):
     return maxp
 
 def imagination(maxp, rows, cols, mode):
-    mode_s = 'discrete' if mode == 0 else 'continuous'
     threshold = 16 if mode == 0 else 128
     images = [[[int(maxp[n][i][j] >= threshold) for j in range(cols)] for i in range(rows)] for n in range(10)]
-    # images = [[[int(maxp[n][i][j]) for j in range(cols)] for i in range(rows)] for n in range(10)]
     for n in range(len(images)):
         print(str(n) + ':')
         for i in range(rows):
@@ -180,7 +170,6 @@ def imagination(maxp, rows, cols, mode):
                 print(images[n][i][j], end=' ')
             print()
         print()
-        # plt.imsave(str(n) + '_var', images[n], cmap='gray', format='png')
 
 def naive_bayes(train_images, train_labels, test_images, test_labels, mode):
     rows, cols = len(train_images[0]), len(train_images[0][0])
@@ -193,27 +182,11 @@ def naive_bayes(train_images, train_labels, test_images, test_labels, mode):
 
     elif mode == 1:
         mean, var, p = learn_continuous(train_images, train_labels)
-        # for n in range(len(mean)):
-        #     print(n)
-        #     for i in range(rows):
-        #         for j in range(cols):
-        #             print(mean[n][i][j], end=' ')
-        #         print()
-        #     print()
-
-        # for n in range(len(var)):
-        #     print(n)
-        #     for i in range(rows):
-        #         for j in range(cols):
-        #             print(var[n][i][j], end=' ')
-        #         print()
-        #     print()
         err = test_continuous(test_images, test_labels, mean, var, p)
         print('Error rate', err)
         imagination(mean, rows, cols, mode)
-        # imagination(var, rows, cols, mode)
 
-## example: python3 hw2.py 0 hw2.yaml
+## example: python3 p1.py 0 p1.yaml
 if (len(sys.argv) < 3):
     print('Usage: python3 hw2.py {0|1} <yaml file>')
     exit()
