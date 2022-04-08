@@ -14,6 +14,16 @@ class Matrix:
         if self.t:
             self.h, self.w = self.w, self.h
 
+    def mat(self):
+        if self.t:
+            M = [[0] * self.w for _ in range(self.h)]
+            for i in range(self.h):
+                for j in range(self.w):
+                    M[i][j] = self.access(i, j)
+            return M
+        else:
+            return self.M
+
     def access(self, i, j):
         if self.t:
             i, j = j, i
