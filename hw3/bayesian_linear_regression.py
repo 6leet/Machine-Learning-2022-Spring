@@ -68,7 +68,7 @@ def regression(b, n, a, w):
     ys = []
     S = mat.Matrix.identity(n).mult(0)
     m = mat.Matrix([[0] * n]).transpose()
-    last_var = 0
+    last_predict_var = 0
     while True:
         _x, _y = random.polynomial_basis_linear_model(n, var, w, 1)
         x, y = _x[0], _y[0]
@@ -102,7 +102,7 @@ def regression(b, n, a, w):
         print('Predictive distribution ~ N(' + str(predict_mean) + ', ' + str(predict_var) + ')')
         print()
 
-        if abs(last_var - predict_var) < 1e-6:
+        if abs(last_predict_var - predict_var) < 1e-6:
             plt.subplot(222)
             plt.title('Predict result')
             plot_points(xs, ys)
@@ -124,7 +124,7 @@ def regression(b, n, a, w):
             plot_points(xs, ys)
             plot_predict(mean_vec, covariance_mat, n, a)
 
-        last_var = predict_var
+        last_predict_var = predict_var
 
         i += 1
 b = 1
