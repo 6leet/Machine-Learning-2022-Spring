@@ -1,3 +1,4 @@
+from sympy import true
 import random_data_generator as random
 from matplotlib import pyplot as plt
 import matrix as mat
@@ -65,25 +66,25 @@ def get_train_and_label(D1, D2):
 
     return D1, ground_truth
 
-def gradient_descent(D1, D2, lr):
-    D, ground_truth = get_train_and_label(D1, D2)
-    W = mat.Matrix([random.gaussian(size=3)])
+def gradient_descent(W, D, ground_truth, lr):
+    At = mat.Matrix(D).transpose()
 
     error = 0
     last_error = 1
 
-    while abs(error - last_error) > 1e-7 * len(D): # convergence rule?
+    while abs(error - last_error) > 1e-4 * len(D): # still convergence problem
         last_error = error
         error = 0
-
-        delta = mat.Matrix([[0, 0, 0]])
+        delta = []
         for y, d in zip(ground_truth, D):
             x = mat.Matrix([d])
             z = W.product(x.transpose()).access(0, 0)
+            # print(y, sigmoid(z))
             error += abs(y - sigmoid(z))
-            delta = delta.add(x.mult(-(y - sigmoid(z))))
-
-        W = W.add(delta.mult(-1 * lr))
+            delta.append(sigmoid(z) - y)
+        
+        delta = mat.Matrix([delta]).transpose()
+        W = W.add(At.product(delta).transpose().mult(-1 * lr))
 
     D1 = []
     D2 = []
@@ -116,63 +117,6 @@ def gradient_descent(D1, D2, lr):
 
     plot_gradient([D1, D2], ['r', 'b'])
 
-def _gradient_descent(D1, D2, lr):
-    D, ground_truth = get_train_and_label(D1, D2)
-    Wt = mat.Matrix([random.gaussian(size=3)]).transpose()
-
-    At = mat.Matrix(D).transpose()
-    At.transpose().show()
-    # At.show()
-
-    error = 0
-    last_error = 1
-
-    while abs(error - last_error) > 1e-15 * len(D): # convergence rule?
-        last_error = error
-        error = 0
-        delta = []
-        for y, d in zip(ground_truth, D):
-            x = mat.Matrix([d])
-            z = Wt.transpose().product(x.transpose()).access(0, 0)
-            print(y, sigmoid(z))
-            error += abs(y - sigmoid(z))
-            delta.append(sigmoid(z) - y)
-        
-        delta = mat.Matrix([delta]).transpose()
-
-        Wt = Wt.add(At.product(delta))
-
-    D1 = []
-    D2 = []
-    confusion_matrix = [[0, 0], [0, 0]]
-    for y, d in zip(ground_truth, D):
-        x = mat.Matrix([d])
-        z = Wt.transpose().product(x.transpose()).access(0, 0)
-        if (sigmoid(z) > 0.5):
-            D1.append(d[:2])
-            if (y == 1):
-                confusion_matrix[0][0] += 1
-            else:
-                confusion_matrix[1][0] += 1
-        else:
-            D2.append(d[:2])
-            if (y == 1):
-                confusion_matrix[0][1] += 1
-            else:
-                confusion_matrix[1][1] += 1
-    print('Gradient descent:\n')
-    print('W:')
-    Wt.show()
-
-    print()
-    print_confusion(confusion_matrix)
-
-    print()
-    print('Sensitivity (Successfully predict cluster 1):', confusion_matrix[0][0] / sum(confusion_matrix[0]))
-    print('Specificity (Successfully predict cluster 2):', confusion_matrix[1][1] / sum(confusion_matrix[1]))
-
-    plot_gradient([D1, D2], ['r', 'b'])
-
 
 N = 50
 mxs = [1, 3]
@@ -182,6 +126,9 @@ vys = [2, 4]
 
 D1, D2 = generate_ground_truth(N, mxs, vxs, mys, vys)
 plot_ground([D1, D2], ['r', 'b'])
-_gradient_descent(D1, D2, 2)
+
+W = mat.Matrix([random.gaussian(size=3)])
+D, ground_truth = get_train_and_label(D1, D2)
+gradient_descent(W, D, ground_truth, 2)
 plt.savefig('test.png')
 
