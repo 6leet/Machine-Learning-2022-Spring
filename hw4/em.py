@@ -1,3 +1,4 @@
+import numpy as np
 import yaml
 import sys
 from matplotlib import pyplot as plt
@@ -39,6 +40,26 @@ def preprocess(_image_file, _label_file): ## non-intel: high endian, intel: low 
 
     return images, labels
 
+def difference(mu, new_mu):
+    ans = 0
+    for i in range(10):
+        for j in range(784):
+            ans += abs(mu[i,j] - new_mu[i,j])
+    
+    return ans
+
+def display_num(mean):
+    for i in range(10):
+        print("\nclass: ", i)
+        for j in range(28):
+            for k in range(28):
+                if (mean[i][j*28 + k] > 0.5):
+                    print("1", end=" ")
+                else:
+                    print("0", end=" ")
+            print("")
+        print("")
+
 def get_X(train_images, train_labels):
     h = len(train_images[0])
     w = len(train_images[0][0])
@@ -50,76 +71,69 @@ def get_X(train_images, train_labels):
 
     return X
 
-def get_init(train_images, train_labels):
-    Xs = get_X(train_images, train_labels)
-
-    h = len(train_images[0])
-    w = len(train_images[0][0])
-    Ps = [[[] for _ in range(h)] for _ in range(w)]
-
-    cnt = [0] * 10
-    for n in train_labels:
-        cnt[n] += 1
-    lams = [[[cnt[n] / sum(cnt) for n in range(len(cnt))] for _ in range(w)] for _ in range(h)]
-
-    for i in range(h):
-        for j in range(w):
-            X = Xs[i][j]
-            cnt_one = [0] * 10
-            for x, n in zip(X, train_labels):
-                cnt_one[n] += x
-            
-            Ps[i][j] = [cnt_one[n] / cnt[n] for n in range(len(cnt))]
+def get_init(images, labels):
+    h = len(images[0])
+    w = len(images[0][0])
     
-    return Xs, lams, Ps
+    _, cnt = np.unique(train_labels, return_counts=True)
+    lamb = cnt / sum(cnt)
 
-def _em_algorithm(train_images, train_labels):
-    Xs, lams, Ps = get_init(train_images, train_labels)
+    Ps = np.zeros((10, h, w))
+    for image, n in zip(images, labels):
+        Ps[n] += np.array(image)
 
-    h = len(train_images[0])
-    w = len(train_images[0][0])
+    for n in range(len(Ps)):
+        Ps[n] /= cnt[n]
+    
+    return lamb, Ps
 
+def em_algorithm(images, labels):
+    lamb, Ps = get_init(images, labels)
+
+    h = len(images[0])
+    w = len(images[0][0])
+
+    N = len(labels)
     cnt = 0
-    while cnt < 100:
-        cnt += 1
-
-        for i in range(h):
-            for j in range(w):
-                print(str(cnt) + ':', i, j)
-                # E
-                W = [[], []]
-                for a in range(2):
-                    s = sum([l * (1 - a + max(p, 1e-4)) for l, p in zip(lams[i][j], Ps[i][j])])
-                    W[a] = [l * (1 - a + max(p, 1e-4)) / s for l, p in zip(lams[i][j], Ps[i][j])]
-                # M
-                for n in range(len(Ps[i][j])):
-                    lams[i][j][n] = sum([W[x][n] for x in Xs[i][j]]) / len(Xs[i][j])
-                    Ps[i][j][n] = W[1][n] * sum(Xs[i][j]) / (lams[i][j][n] * len(Xs[i][j]))
-
-            
-        print('Iteration', cnt)
-        for n in range(10):
-            image = []
-            for i in range(h):
-                row = []
-                for j in range(w):
-                    # row.append(Ps[i][j][n])
-                    print(round(Ps[i][j][n]), end=' ')
-                print()
-            print()
-            #     image.append(row)
-            # plt.imshow(image, cmap='gray')
-            # plt.show()
-
-def em_algorithm(train_images, train_labels):
-    Xs, lams, Ps = get_init(train_images, train_labels)
-
-    N = len(train_labels)
-    cnt = 0
+    labels = []
     while cnt < 10:
         cnt += 1
 
-        W = [[0] * 10 for _ in range(N)]
+        # E
+        W = np.zeros((N, 10))
+
+        for k in range(N):
+            outcome_prob = np.log(lamb)
+            for n in range(10):
+                P = np.log(Ps[n])
+                image = np.log(images[k])
+
+                _P = np.ones((h, w)) - P
+                _image = np.ones((h, w)) - image
+
+                outcome_prob[n] += sum(P * image) + sum(_P * _image)
+
+            outcome_prob = np.exp(outcome_prob)
+            W[k] = outcome_prob / sum(outcome_prob)
+            max_label = np.argmax(W[k])
+
+            labels.append(max_label)
+
+        # M
+        sum_W = sum(W.T)
+        lamb = sum_W / N
+
+        _Ps = Ps.copy()
+        Ps = np.zeros((10, h, w))
+        for n in range(10):
+            for k in range(N):
+                Ps[n] += W[k][n] * train_images[k]
+            Ps[n] /= sum_W[n]
+
+        diff = float(difference(Ps, _Ps))    
+        display_num(Ps)
+
+        print("----------------#", cnt, "iteration, differance: ", diff, "----------------")
 
 
 if (len(sys.argv) < 2):
