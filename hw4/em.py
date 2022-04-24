@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import isneginf
 import yaml
 import sys
 from matplotlib import pyplot as plt
@@ -106,11 +107,12 @@ def em_algorithm(images, labels):
             outcome_prob = np.log(lamb)
             for n in range(10):
                 P = np.log(Ps[n])
+                P[isneginf(P)]=-15
                 image = np.log(images[k])
+                image[isneginf(image)]=-15
 
-                _P = np.ones((h, w)) - P
+                _P = -P
                 _image = np.ones((h, w)) - image
-
                 outcome_prob[n] += sum(P * image) + sum(_P * _image)
 
             outcome_prob = np.exp(outcome_prob)
