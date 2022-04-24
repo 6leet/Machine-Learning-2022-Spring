@@ -4,8 +4,9 @@ from matplotlib import pyplot as plt
 import matrix as mat
 import math
 
-def plot_data_points(D, cluster, subplot):
+def plot_data_points(method, D, cluster, subplot):
     plt.subplot(subplot)
+    plt.title(method)
     color = ['r', 'b']
     for y, d in zip(cluster, D):
         y = round(y)
@@ -117,7 +118,7 @@ def newton_method(W, D, ground_truth, lr):
     At = mat.Matrix(D).transpose()
 
     i = 0
-    while i < 10:
+    while i < 1000:
         i += 1
 
         Z = W.product(At).mat()[0]
@@ -144,21 +145,21 @@ def regression(D, ground_truth, init_W, method):
     confusion_matrix = get_confusion_matrix(result, ground_truth)
 
     print_result(method, W, confusion_matrix)
-    plot_data_points(D, result, subplot)
+    plot_data_points(method, D, result, subplot)
 
 
 N = 50
-mxs = [1, 10]
-vxs = [2, 2]
-mys = [1, 10]
-vys = [2, 2]
+mxs = [1, 3]
+vxs = [2, 4]
+mys = [1, 3]
+vys = [2, 4]
 
 D, ground_truth = generate_ground_truth(N, mxs, vxs, mys, vys)
-plot_data_points(D, ground_truth, 131)
+plot_data_points('Ground truth', D, ground_truth, 131)
 
 init_W = random.gaussian(size=3)
 regression(D, ground_truth, init_W, 'Gradient descent')
 regression(D, ground_truth, init_W, 'Newton\'s method')
 
-plt.savefig('test.png')
+plt.savefig('logistic_regression.png')
 
