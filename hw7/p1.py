@@ -2,6 +2,7 @@ from audioop import avg
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+import scipy.spatial.distance
 
 subN = 15
 confs = ['centerlight', 'glasses', 'happy', 'leftlight', 'noglasses', 'normal', 'rightlight', 'sad', 'sleepy', 'surprised', 'wink']
@@ -56,21 +57,34 @@ def knn(trainData, testData, k):
     
     print('Accuracy: {}'.format(acc))
 
+## eigenface
+
 def pca(X, todim=None):
-    # X_mean = np.mean(X, axis=1).reshape(-1, 1)
     meanx = np.mean(X, axis=1).reshape(-1, 1)
     centerX = X - meanx
 
-    eigval, eigvec = np.linalg.eig(centerX.T @ centerX)
-    sortIdx = np.argsort(-eigval)
-    sortIdx = sortIdx[:todim] if todim is not None else sortIdx[sortIdx > 0]
+    eigVal, eigVec = np.linalg.eig(centerX.T @ centerX)
+    sortIdx = np.argsort(-eigVal)
+    sortIdx = sortIdx[:todim] if todim is not None else sortIdx[eigVal > 0]
 
-    eigval=eigval[sortIdx]
-    # # from X.T@X eigenvector to X@X.T eigenvector
-    eigvec = centerX @ eigvec[:, sortIdx]
-    eigvec = eigvec / np.linalg.norm(eigvec,axis=0)
+    eigVal = eigVal[sortIdx]
+    eigVec = centerX @ eigVec[:, sortIdx]
+    eigVec = eigVec / np.linalg.norm(eigVec,axis=0)
 
-    return eigval, eigvec, meanx
+    return eigVal, eigVec, meanx
+
+def eigenface(faces, labels, testFaces, testLabels):
+    _, eigFaces, avgFace = pca(faces, 25)
+    showFaces(eigFaces, 5, 5)
+
+    projs = eigFaces.T @ (faces - avgFace)
+    recovs = eigFaces @ projs + avgFace
+    np.random.shuffle(recovs.T)
+    showFaces(recovs, 1, 10)
+    
+    testFaces, testLabels = getFace(testPath)
+    testProjs = eigFaces.T @ (testFaces - avgFace)
+    knn((projs, labels), (testProjs, testLabels), subN)
 
 def getSbAndSw(X, y):
     d, _ = X.shape
@@ -88,6 +102,8 @@ def getSbAndSw(X, y):
 
     return Sb, Sw
 
+## fisherface
+
 def lda(X, y, todim=None):
     Sb, Sw = getSbAndSw(X, y)
 
@@ -95,25 +111,12 @@ def lda(X, y, todim=None):
     sortIdx=np.argsort(-eigVal.real)
     sortIdx = sortIdx[:todim] if todim is not None else sortIdx[:-1]
 
-    eigVal = np.asarray(eigVal[sortIdx].real, dtype='float')
-    eigVec = np.asarray(eigVec[:, sortIdx].real, dtype='float')
+    eigVal = np.asarray(eigVal[sortIdx].real, dtype=float)
+    eigVec = np.asarray(eigVec[:, sortIdx].real, dtype=float)
 
     return eigVal, eigVec
 
-def eigenface(faces, labels):
-    _, eigFaces, avgFace = pca(faces, 25)
-    showFaces(eigFaces, 5, 5)
-
-    projs = eigFaces.T @ (faces - avgFace)
-    recovs = eigFaces @ projs + avgFace
-    np.random.shuffle(recovs.T)
-    showFaces(recovs, 1, 10)
-    
-    testFaces, testLabels = getFace(testPath)
-    testProjs = eigFaces.T @ (testFaces - avgFace)
-    knn((projs, labels), (testProjs, testLabels), subN)
-
-def fisherface(faces, labels):
+def fisherface(faces, labels, testFaces, testLabels):
     _, eigFacesPca, avgFace = pca(faces, 31)
     pcaProjs = eigFacesPca.T @ (faces - avgFace)
 
@@ -129,13 +132,71 @@ def fisherface(faces, labels):
 
     testFaces, testLabels = getFace(testPath)
     testProjs = eigFaces.T @ testFaces
-    knn((projs, labels), (testProjs, testLabels), 11)
+    print(testProjs.shape, projs.shape)
+    knn((projs, labels), (testProjs, testLabels), subN)
 
-def kernelPCA(faces, labels):
+## kernel eigenface
+
+def linear(X, Y, c=1): # shit face
+    return X.T @ Y * c
+
+def poly(X, Y, gamma=1, coef=0, degree=5): # shit face
+    return np.power(gamma * (X.T @ Y) + coef, degree)
+
+def rbf(X, Y, gamma=1e-8): # 0.83
+    return np.exp(-gamma * scipy.spatial.distance.cdist(X.T, Y.T, 'sqeuclidean'))
+
+def exp(X, Y, sigma=40): # 0.83
+    return np.exp(-(1 / (2 * sigma ** 2)) * scipy.spatial.distance.cdist(X.T, Y.T, 'euclidean'))
+
+def sigmoid(X, Y, alpha=10, c=15): # shit face
+    return np.tanh(alpha * (X.T @ Y) + c)
+
+def rotational_quadratic(X, Y, c=1e7): # 0.86
+    dist = scipy.spatial.distance.cdist(X.T, Y.T, 'euclidean')
+    return 1 - (dist ** 2 / (dist ** 2 + c))
+
+def getKernel(X, Y, k):
+    return [linear, poly, rbf, exp, rotational_quadratic][k](X, Y)
+
+def kpca(K, todim=None):
+    _, n = K.shape
+    ones = np.ones(K.shape) / n
+    centK = K - K @ ones - ones @ K + ones @ K @ ones
+
+    eigVal, eigVec = np.linalg.eig(centK)
+    sortIdx = np.argsort(-eigVal)
+    sortIdx = sortIdx[:todim] if todim is not None else sortIdx[eigVal > 0]
+
+    eigVal = eigVal[sortIdx]
+    eigVec = eigVec[:, sortIdx]
+    eigVec = eigVec / np.sqrt(eigVal)
+
+    return eigVal, eigVec, centK
+
+def keigenface(faces, labels, testFaces, testLabels, k):
+    _, n = faces.shape
+    K = getKernel(faces, faces, k)
+    _, alphas, centK = kpca(K, 50)
+
+    projs = alphas.T @ centK.T
+
     
+    _, tn = testFaces.shape
+    testK = getKernel(testFaces, faces, k)
 
+    ones = np.ones(K.shape) / n
+    tones = np.ones((n, tn)) / n
+    testCentK = testK - testK @ ones - tones.T @ K + tones.T @ K @ ones
+
+    testProjs = alphas.T @ testCentK.T
+    knn((projs, labels), (testProjs, testLabels), subN)
 
 trainPath = 'Yale_Face_Database/Training'
 testPath = 'Yale_Face_Database/Testing'
 
 faces, labels = getFace(trainPath)
+testFaces, testLabels = getFace(testPath)
+# eigenface(faces, labels)
+# fisherface(faces, labels)
+keigenface(faces, labels, 2)
